@@ -15,7 +15,7 @@ This repository contains scripts and utilities for collecting, processing, and m
 ## Installation
 Clone the repository:
 ```sh
-git clone https://github.com/yourusername/firefighters-data-collection.git
-cd firefighters-data-collection
+git clone https://github.com/IllinoisFireServiceInstitute/firefighters_data_collection_ifsi.git
+cd firefighters_data_collection_ifsi
 ```
 
