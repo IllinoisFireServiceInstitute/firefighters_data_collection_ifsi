@@ -77,7 +77,13 @@ def insert_main_record(record):
         "Sample Status": [record.get("Sample satus")] if pd.notna(record.get("Sample satus")) else [], "Shipment Date": record.get("Shipment Date"),
         "Shipment Location": record.get("Shipment Location")
     }
-    cleaned_data = {k: v for k, v in fixed_record.items() if not (pd.isna(v) or (isinstance(v, list) and len(v) == 0))}
+    cleaned_data = {
+        k: v for k, v in fixed_record.items()
+        if not (
+                (isinstance(v, list) and len(v) == 0) or
+                (not isinstance(v, list) and pd.isna(v))
+        )
+    }
     response = requests.post(url, json={"fields": cleaned_data}, headers=HEADERS)
     if response.status_code not in [200, 201]:
         print(f"Error {response.status_code}: {response.text}")
