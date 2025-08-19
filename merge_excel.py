@@ -9,33 +9,54 @@ def merge_excel_files(directory, output_file):
     for filename in os.listdir(directory):
         if filename.endswith('.xlsx'):
             file_path = os.path.join(directory, filename)
-            df = pd.read_excel(file_path, engine="openpyxl")
 
-            # Coalesce processor columns
-            if 'Initial of processor' in df.columns or 'Initial of processorr' in df.columns:
-                # Create temporary columns with fallback values
-                df['Processor'] = df.get('Initial of processor', pd.Series(index=df.index))
-                df['Processor_temp'] = df.get('Initial of processorr', pd.Series(index=df.index))
+            # Read all columns as strings, allow empty values (NaN stays as NaN)
+            df = pd.read_excel(file_path, engine="openpyxl", dtype=str, keep_default_na=False, na_values=[""])
 
-                # Coalesce logic: prefer 'Initial of processor', fallback to 'Initial of processorr'
-                df['Processor'] = df['Processor'].combine_first(df['Processor_temp'])
+            # Strip column names just in case
+            df.columns = [col.strip() for col in df.columns]
 
-                # Drop temporary column and original columns
-                df = df.drop(columns=['Processor_temp'], errors='ignore')
-                df = df.drop(columns=['Initial of processor', 'Initial of processorr'], errors='ignore')
+            # Processor initials handling
+            processor_col = None
+            if 'Initial of processors' in df.columns:
+                processor_col = df['Initial of processors']
+            elif 'Initial of processorr' in df.columns:
+                processor_col = df['Initial of processorr']
+
+            if processor_col is not None:
+                def clean_initials(val):
+                    if pd.isna(val) or val.strip() == "":
+                        return ""
+                    initials = [x.strip() for x in str(val).split(',')]
+                    return ':'.join(initials)
+
+                df['Processor'] = processor_col.apply(clean_initials)
+
+            # Drop original processor columns
+            df = df.drop(columns=['Initial of processors', 'Initial of processorr'], errors='ignore')
+
+            # Handle empty 'Processing Date' column
+            if 'Processing Date' in df.columns:
+                # Option 1: Fill empty 'Processing Date' with a placeholder (e.g., 'Not Provided')
+                df['Processing Date'].fillna('Not Provided', inplace=True)
+
+                # Option 2: Alternatively, if you want to remove rows where 'Processing Date' is empty
+                # df = df[df['Processing Date'].notna()]
 
             all_dataframes.append(df)
 
     if all_dataframes:
         merged_df = pd.concat(all_dataframes, ignore_index=True)
-        merged_df.to_csv(output_file, index=False)
-        print(f"Data saved to {output_file}")
+
+        # Save to CSV, keeping empty strings as-is
+        merged_df.to_csv(output_file, index=False, na_rep='')
+        print(f"✅ Data saved to {output_file}")
     else:
-        print("No Excel files found in the directory.")
+        print("⚠️ No Excel files found in the directory.")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Merge Excel files and coalesce processor columns")
+    parser = argparse.ArgumentParser(description="Merge Excel files and clean processor initials")
     parser.add_argument("directory", help="Path to directory containing Excel files")
     parser.add_argument("output", help="Output CSV file path")
 

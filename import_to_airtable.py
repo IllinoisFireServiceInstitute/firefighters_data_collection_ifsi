@@ -25,8 +25,10 @@ HEADERS = {"Authorization": f"Bearer {API_KEY}", "Content-Type": "application/js
 
 def format_date(date_str):
     try:
-        if isinstance(date_str, float):
-            return None
+        # If the date is already in the format YYYY-MM-DD, just return it
+        if isinstance(date_str, str) and len(date_str) == 10 and date_str[4] == '-' and date_str[7] == '-':
+            return date_str
+        # Otherwise, parse MM/DD/YY format and convert to YYYY-MM-DD
         return datetime.strptime(date_str, "%m/%d/%y").strftime("%Y-%m-%d")
     except (ValueError, TypeError):
         return None
@@ -55,34 +57,53 @@ def insert_record(base_id, table_name, value, filter_col):
 def process_references(record):
     updated_record = {}
     for field, table in REFERENCE_TABLES.items():
-        # Corrected condition with proper parentheses
         if field in record and not (pd.isna(record.get(field)) or record.get(field) is None):
-            ref_value = record[field]
-            ref_id = get_record_id(REFERENCE_BASE_ID, table, ref_value, REFERENCE_COL_NAMES[field])
-            if not ref_id:
-                print(record)
-                ref_id = insert_record(REFERENCE_BASE_ID, table, ref_value, REFERENCE_COL_NAMES[field])
-            updated_record[field] = [ref_id] if ref_id else []
+            if field == "Processor":
+                processors = str(record[field]).split(":")
+                processor_ids = []
+                for proc in processors:
+                    proc = proc.strip()
+                    if not proc:
+                        continue
+                    ref_id = get_record_id(REFERENCE_BASE_ID, table, proc, REFERENCE_COL_NAMES[field])
+                    if not ref_id:
+                        print(f"Processor '{proc}' not found, inserting...")
+                        ref_id = insert_record(REFERENCE_BASE_ID, table, proc, REFERENCE_COL_NAMES[field])
+                    if ref_id:
+                        processor_ids.append(ref_id)
+                updated_record[field] = processor_ids
+            else:
+                ref_value = record[field]
+                ref_id = get_record_id(REFERENCE_BASE_ID, table, ref_value, REFERENCE_COL_NAMES[field])
+                if not ref_id:
+                    print(f"{field} '{ref_value}' not found, inserting...")
+                    ref_id = insert_record(REFERENCE_BASE_ID, table, ref_value, REFERENCE_COL_NAMES[field])
+                updated_record[field] = [ref_id] if ref_id else []
     return updated_record
 
 def insert_main_record(record):
     url = f"https://api.airtable.com/v0/{MAIN_BASE_ID}/{TABLE_NAME}"
-    safe_get = lambda f: [str(x) for x in (record.get(f) if isinstance(record.get(f), list) else [record.get(f)])] if pd.notna(record.get(f)) else []
+
+    def safe_get(field):
+        value = record.get(field)
+        if value is None or (not isinstance(value, list) and pd.isna(value)):
+            return []
+        return [str(x) for x in value] if isinstance(value, list) else [str(value)]
+
     fixed_record = {
-        "Part ID": str(record.get("Part_ID", "")), "Sample ID": record.get("sample_ID"), "Biomatrix": record.get("Biometrix"),
-        "Sample Volume (ml)": record.get("Sample Volume (ml)"), "Date of Collection": record.get("Date_of_collection"),
-        "Time of Collection": record.get("Time_of_collection"), "Collector": safe_get("Initial of collector"),
-        "Sample Processing Date": record.get("Sample processing date"), "Sample Processing Time": record.get("Sample processing time"),
-        "Processor": safe_get("Processor"), "Sample Storage Location": safe_get("Sample storage location"),
-        "Sample Status": [record.get("Sample satus")] if pd.notna(record.get("Sample satus")) else [], "Shipment Date": record.get("Shipment Date"),
-        "Shipment Location": record.get("Shipment Location")
+        "Part ID": str(record.get("Part_ID", "")),
+        "Sample ID": record.get("Sample_ID"),
+        "Biomatrix": record.get("Biomatrix"),
+        "Sample Volume (ml)": record.get("Sample Volume (ml)"),
+        "Date of Collection": format_date(record.get("Date_of_collection")),
+        "Sample Processing Date": format_date(record.get("Sample processing date")),
+        "Sample Storage Location": safe_get("Sample storage location"),
+        "Sample Status": [record.get("Sample Status")] if pd.notna(record.get("Sample Status")) else [],
+        "Processor": safe_get("Processor")
     }
     cleaned_data = {
         k: v for k, v in fixed_record.items()
-        if not (
-                (isinstance(v, list) and len(v) == 0) or
-                (not isinstance(v, list) and pd.isna(v))
-        )
+        if not ((isinstance(v, list) and len(v) == 0) or (not isinstance(v, list) and pd.isna(v)))
     }
     response = requests.post(url, json={"fields": cleaned_data}, headers=HEADERS)
     if response.status_code not in [200, 201]:
