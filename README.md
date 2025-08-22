@@ -1,4 +1,4 @@
-# Firefighters Data Collection Scripts
+ # Firefighters Data Collection Scripts
 
 This repository contains scripts and utilities for collecting, processing, and managing firefighters' data. The scripts streamline data acquisition, ensure accuracy, and support further analysis.
 
