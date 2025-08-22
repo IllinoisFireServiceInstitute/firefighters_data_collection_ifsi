@@ -55,25 +55,11 @@ pip install nox
 Run individual sessions:
 ```bash
 nox -s setup_env
-```
-
 nox -s run_merge_excel
 nox -s run_airtable_upload
-nox
+```
 
 Default Configuration
 
 Merge Excel: Input directory /Users/niranjank/Downloads/updated/, output ./merged_data.csv
 Airtable Upload: Uses ./merged_data.csv as input
-
-Customizing Arguments
-
-Edit noxfile.py to change default paths:
-
-For merge operation
-
-session.run("python", "merge_excel.py", "/your/input/path/", "./your_output.csv")
-
-For Airtable upload:
-
-session.run("python", "import_to_airtable.py", "./your_output.csv")
